@@ -2,9 +2,6 @@ package main
 
 import (
 	"flag"
-	"golang.org/x/image/font"
-	"golang.org/x/image/font/inconsolata"
-	"golang.org/x/image/math/fixed"
 	"image"
 	"image/color"
 	"image/png"
@@ -14,11 +11,21 @@ import (
 	"os"
 )
 
-var maxIterations = flag.Int("i", 30, "max iterations")
-var size = flag.Int("s", 2400, "Size of the image")
-var zoomWidthRatio = flag.Int("z", 1, "Size of the image")
-var xStart = flag.Float64("x", 0.0, "x start position")
-var yStart = flag.Float64("y", 0.0, "y start position")
+var (
+	maxIterations  int
+	size           int
+	zoomWidthRatio int
+	xStart         float64
+	yStart         float64
+)
+
+func init() {
+	flag.IntVar(&maxIterations, "i", 30, "max iterations")
+	flag.IntVar(&size, "s", 2400, "Size of the image")
+	flag.IntVar(&zoomWidthRatio, "z", 1, "Size of the image")
+	flag.Float64Var(&xStart, "x", 0.0, "x start position")
+	flag.Float64Var(&yStart, "y", 0.0, "y start position")
+}
 
 func main() {
 	flag.Parse()
@@ -29,7 +36,7 @@ func smoothColor(n int, z complex128) *color.RGBA {
 
 	var hue float64
 	hue = (float64(n) + 1.0) - (math.Log(math.Log(cmplx.Abs(z))) / math.Log(2.0))
-	hue = 0.95 + 15.0*hue // adjust to make it prettier
+	hue = 0.95 + 200.0*hue // adjust to make it prettier
 	// the hsv function expects values from 0 to 360
 	for hue > 360.0 {
 		hue -= 360.0
@@ -38,35 +45,34 @@ func smoothColor(n int, z complex128) *color.RGBA {
 		hue += 360.0
 	}
 	hsv := HSV{hue, float64(n) / (float64(n) + 8.0), 1.0}
-	//hsv := HSV{(0.95 + (10 * smoothedColor)), 0.6, 1.0}
 	return hsv.RGBA()
 }
 
 // Mandelbrot equation
 func mandelbrot(complexCoords complex128) int {
 	z := complexCoords
-	for i := 0; i < *maxIterations-1; i++ {
-		if cmplx.Abs(z) > 2 {
+	for i := 0; i < maxIterations-1; i++ {
+		if cmplx.Abs(z) > 2 { // radius
 			return i
 		}
 		// z = z^2 + C
 		z = cmplx.Pow(z, 2) + complexCoords
 	}
-	return *maxIterations - 1
+	return maxIterations
 }
 
 func drawMandelbrot(out io.Writer, radius float64) {
 	// set dimensions
-	imageHeight := *size
-	imageWidth := *size
+	imageHeight := size
+	imageWidth := size
 
 	// init image
-	img := image.NewRGBA(image.Rectangle{image.Point{0, 0}, image.Point{*size, *size}})
+	img := image.NewRGBA(image.Rectangle{image.Point{0, 0}, image.Point{size, size}})
 
 	// values for calculation zoom
-	imgZoomCenter := complex(*xStart, *yStart)
+	imgZoomCenter := complex(xStart, yStart)
 
-	zoomWidth := radius * 2 * float64(*zoomWidthRatio)
+	zoomWidth := radius * 2 * float64(zoomWidthRatio)
 	pixelWidth := zoomWidth / float64(imageWidth)
 	pixelHeight := pixelWidth
 	viewHeight := (float64(imageHeight) / float64(imageWidth)) * zoomWidth
@@ -79,14 +85,14 @@ func drawMandelbrot(out io.Writer, radius float64) {
 			coord := complex(left+float64(xPos)*pixelWidth, top+float64(yPos)*pixelHeight)
 			iteration := mandelbrot(coord)
 
-			//			img.Set(xPos, yPos, colorForPoint(iteration, *maxIterations))
-			img.Set(xPos, yPos, smoothColor(iteration, coord))
+			if iteration < maxIterations {
+				img.Set(xPos, yPos, smoothColor(iteration, coord))
+			} else {
+				img.Set(xPos, yPos, color.Black)
+			}
 		}
 
 	}
-
-	addLabel(img, imageWidth-(imageWidth/2), imageHeight-(imageHeight/2)-80, "Mandelbrot Set")
-	addLabel(img, imageWidth-(imageWidth/2), imageHeight-(imageHeight/2)-40, "Justin Baker")
 
 	// Output image
 	png.Encode(out, img)
@@ -146,17 +152,4 @@ func (c *HSV) RGBA() *color.RGBA {
 	rgb := &color.RGBA{uint8(r), uint8(g), uint8(b), uint8(alpha)}
 	return rgb
 
-}
-
-func addLabel(img *image.RGBA, x, y int, label string) {
-	col := color.RGBA{250, 150, 25, 255}
-	point := fixed.Point26_6{fixed.Int26_6(x * 64), fixed.Int26_6(y * 64)}
-
-	d := &font.Drawer{
-		Dst:  img,
-		Src:  image.NewUniform(col),
-		Face: inconsolata.Bold8x16,
-		Dot:  point,
-	}
-	d.DrawString(label)
 }
