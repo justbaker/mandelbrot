@@ -12,31 +12,25 @@ import (
 )
 
 var (
-	maxIterations  int
-	size           int
-	zoomWidthRatio int
-	xStart         float64
-	yStart         float64
+	maxIterations int
+	size          int
 )
 
 func init() {
 	flag.IntVar(&maxIterations, "i", 30, "max iterations")
 	flag.IntVar(&size, "s", 2400, "Size of the image")
-	flag.IntVar(&zoomWidthRatio, "z", 1, "Size of the image")
-	flag.Float64Var(&xStart, "x", 0.0, "x start position")
-	flag.Float64Var(&yStart, "y", 0.0, "y start position")
 }
 
 func main() {
 	flag.Parse()
-	drawMandelbrot(os.Stdout, 2.0)
+	drawMandelbrot(os.Stdout)
 }
 
 func smoothColor(n int, z complex128) *color.RGBA {
 
 	var hue float64
 	hue = (float64(n) + 1.0) - (math.Log(math.Log(cmplx.Abs(z))) / math.Log(2.0))
-	hue = 0.95 + 200.0*hue // adjust to make it prettier
+	hue = 0.95 + 20.0*hue // adjust to make it prettier
 	// the hsv function expects values from 0 to 360
 	for hue > 360.0 {
 		hue -= 360.0
@@ -49,30 +43,30 @@ func smoothColor(n int, z complex128) *color.RGBA {
 }
 
 // Mandelbrot equation
-func mandelbrot(complexCoords complex128) int {
+func mandelbrot(complexCoords complex128, maxIter int, radius float64) int {
 	z := complexCoords
-	for i := 0; i < maxIterations-1; i++ {
-		if cmplx.Abs(z) > 2 { // radius
+	for i := 0; i < maxIter-1; i++ {
+		if cmplx.Abs(z) > radius {
 			return i
 		}
 		// z = z^2 + C
 		z = cmplx.Pow(z, 2) + complexCoords
 	}
-	return maxIterations
+	return maxIter
 }
 
-func drawMandelbrot(out io.Writer, radius float64) {
-	// set dimensions
+func drawMandelbrot(out io.Writer) {
 	imageHeight := size
 	imageWidth := size
 
-	// init image
 	img := image.NewRGBA(image.Rectangle{image.Point{0, 0}, image.Point{size, size}})
 
 	// values for calculation zoom
-	imgZoomCenter := complex(xStart, yStart)
+	imgZoomCenter := complex(0.0, 0.0)
 
-	zoomWidth := radius * 2 * float64(zoomWidthRatio)
+	radius := 2.0
+
+	zoomWidth := radius * 2
 	pixelWidth := zoomWidth / float64(imageWidth)
 	pixelHeight := pixelWidth
 	viewHeight := (float64(imageHeight) / float64(imageWidth)) * zoomWidth
@@ -83,10 +77,10 @@ func drawMandelbrot(out io.Writer, radius float64) {
 	for xPos := 0; xPos < imageWidth; xPos++ {
 		for yPos := 0; yPos < imageHeight; yPos++ {
 			coord := complex(left+float64(xPos)*pixelWidth, top+float64(yPos)*pixelHeight)
-			iteration := mandelbrot(coord)
-
+			iteration := mandelbrot(coord, maxIterations, radius)
 			if iteration < maxIterations {
-				img.Set(xPos, yPos, smoothColor(iteration, coord))
+				pointColor := smoothColor(iteration, coord)
+				img.Set(xPos, yPos, pointColor)
 			} else {
 				img.Set(xPos, yPos, color.Black)
 			}
